@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.4"?>
+<plugin>
+ <extension point="org.jkiss.dbeaver.dataSourceProvider">
+  <datasource
+                class="org.jkiss.dbeaver.ext.cratedb.model.CrateDataSourceProvider"
+                description="CrateDB Data Source"
+                id="cratedb_ext"
+                parent="postgresql"
+                label="CrateDB"
+                icon="platform:/plugin/org.jkiss.dbeaver.ext.generic/icons/cratedb_icon.png"
+                dialect="postgresql">
+                
+                <treeInjection path="postgresql/database/schema/table"
+                    changeFolderType="org.jkiss.dbeaver.ext.cratedb.model.CrateTable"
+                    changeFolderLabel ="asdasda">
+                </treeInjection>
+                
+                <drivers managable="true">
+                      <driver
+                        id="postgres-cratedb-jdbc-ext"
+                        label="CrateDB"
+                        icon="platform:/plugin/org.jkiss.dbeaver.ext.generic/icons/cratedb_icon.png"
+                        iconBig="platform:/plugin/org.jkiss.dbeaver.ext.generic/icons/cratedb_icon_big.png"
+                        class="org.postgresql.Driver"
+                        sampleURL="jdbc:postgresql://{host}[:{port}]/[{database}]"
+                        useURL="true"
+                        defaultPort="5432"
+                        defaultDatabase="crate"
+                        defaultUser="admin"
+                        webURL="https://www.crate.io/"
+                        propertiesURL="https://jdbc.postgresql.org/documentation/head/connect.html#connection-parameters"
+                        description="%driver.cratedb.description"
+                        supportedConfigurationTypes="MANUAL,URL"
+                        categories="sql">
+                    <file type="jar" path="maven:/org.postgresql:postgresql:RELEASE[42.7.2]" bundle="!drivers.postgresql"/>
+                    <file type="license" path="https://raw.githubusercontent.com/pgjdbc/pgjdbc/master/LICENSE" bundle="!drivers.postgresql"/>
+
+                    <file type="license" path="drivers/postgresql/LICENSE.txt" bundle="drivers.postgresql"/>
+                    <file type="jar" path="drivers/postgresql" bundle="drivers.postgresql"/>
+                    <parameter name="serverType" value="cratedb"/>
+                    <property name="loginTimeout" value="20"/>
+                    <property name="connectTimeout" value="20"/>
+                    <replace provider="postgresql" driver="postgres-cratedb-jdbc"/>
+                </driver>
+              </drivers>
+      </datasource>
+ </extension>
+ <extension point="org.jkiss.dbeaver.generic.meta">
+      <meta
+           id="cratedb_ext"
+           class="org.jkiss.dbeaver.ext.cratedb.model.CrateMetaModel"
+           driverClass="org.postgresql.Driver"
+           dialect="postgresql"/>
+    </extension>
+    <extension point="org.jkiss.dbeaver.objectManager">
+        <manager
+           class="org.jkiss.dbeaver.ext.cratedb.model.CrateTableColumnManager"
+           objectType="org.jkiss.dbeaver.ext.cratedb.model.CrateTableColumn"/>
+    </extension>
+</plugin>
