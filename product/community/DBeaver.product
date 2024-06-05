@@ -12,6 +12,7 @@
       <vmArgs>-XX:+IgnoreUnrecognizedVMOptions
             -Dosgi.requiredJavaVersion=17
             -Dfile.encoding=UTF-8
+            -Dorg.eclipse.swt.graphics.Resource.reportNonDisposed=true
             --add-modules=ALL-SYSTEM
             --add-opens=java.base/java.io=ALL-UNNAMED
             --add-opens=java.base/java.lang=ALL-UNNAMED
