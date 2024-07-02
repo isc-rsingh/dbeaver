@@ -18,7 +18,6 @@ package org.jkiss.dbeaver.ext.import_config.wizards.idea;
 
 import org.jkiss.dbeaver.ext.import_config.wizards.ConfigImportWizard;
 import org.jkiss.dbeaver.ext.import_config.wizards.idea.page.ConfigImportWizardPageIdeaConnections;
-import org.jkiss.dbeaver.ext.import_config.wizards.idea.page.ConfigImportWizardPageIdeaDriver;
 import org.jkiss.dbeaver.ext.import_config.wizards.idea.page.ConfigImportWizardPageIdesSettings;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 
@@ -26,7 +25,7 @@ import java.io.File;
 
 public class ConfigImportWizardIdea extends ConfigImportWizard {
 
-    private ConfigImportWizardPageIdeaDriver pageDriver;
+    //private ConfigImportWizardPageIdeaDriver pageDriver;
     private ConfigImportWizardPageIdesSettings pageSettings;
 
     public enum ImportType {
@@ -41,16 +40,16 @@ public class ConfigImportWizardIdea extends ConfigImportWizard {
 
     @Override
     public void addPages() {
-        pageDriver = new ConfigImportWizardPageIdeaDriver();
+        //pageDriver = new ConfigImportWizardPageIdeaDriver();
         pageSettings = new ConfigImportWizardPageIdesSettings();
 
-        addPage(pageDriver);
+       // addPage(pageDriver);
         addPage(pageSettings);
         super.addPages();
     }
 
     public DBPDriver getDriver() {
-        return pageDriver.getSelectedDriver();
+        return null;
     }
 
     public ConfigImportWizardIdea.ImportType getImportType() {

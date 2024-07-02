@@ -53,13 +53,13 @@ public class ConfigImportWizardPageIdesSettings extends WizardPage {
         Composite placeholder = new Composite(parent, SWT.NONE);
         placeholder.setLayout(new GridLayout(1, true));
 
-        Composite typeGroup = UIUtils.createControlGroup(placeholder, "Input type", 2, GridData.FILL_HORIZONTAL,
-                SWT.DEFAULT);
-        xmlButton = new Button(typeGroup, SWT.RADIO);
-        xmlButton.setText("XML");
-        xmlButton.setSelection(true);
-        csvButton = new Button(typeGroup, SWT.RADIO);
-        csvButton.setText("CSV");
+//        Composite typeGroup = UIUtils.createControlGroup(placeholder, "Input type", 2, GridData.FILL_HORIZONTAL,
+//                SWT.DEFAULT);
+//        xmlButton = new Button(typeGroup, SWT.RADIO);
+//        xmlButton.setText("XML");
+//        xmlButton.setSelection(true);
+//        csvButton = new Button(typeGroup, SWT.RADIO);
+//        csvButton.setText("CSV");
 
         UIUtils.createControlLabel(placeholder, "Input file");
         filePathText = new TextWithOpenFolder(placeholder, "Configuration Input Folder");

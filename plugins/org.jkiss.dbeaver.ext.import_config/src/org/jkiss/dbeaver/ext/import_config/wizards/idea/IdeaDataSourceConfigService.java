@@ -24,6 +24,9 @@ import org.jkiss.utils.xml.XMLException;
 import org.jkiss.utils.xml.XMLUtils;
 import org.w3c.dom.*;
 
+import java.io.FileInputStream;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URI;
 import java.util.HashMap;
@@ -34,39 +37,30 @@ public class IdeaDataSourceConfigService {
     public static final IdeaDataSourceConfigService INSTANCE = new IdeaDataSourceConfigService();
     private static final Log log = Log.getLog(IdeaDataSourceConfigService.class);
 
+    private static final String DATASOURCE_TAG = "data-source";
+
     private IdeaDataSourceConfigService() {
     }
 
-    public Map<String, String> importXML(Reader reader) throws XMLException {
-        Document document = XMLUtils.parseDocument(reader);
-        Map<String, String> conProps = new HashMap<>();
-        // * - for getting all element
-        NodeList allElements = document.getElementsByTagName("*");
-        if (allElements.getLength() == 0) {
-            throw new ImportConfigurationException("No elements found");
-        }
+    public Map<String, Map<String, String>> buildIdeaConfigProps(String pathToIdeaFolder, String encoding) throws Exception {
+        Map<String, Map<String, String>> uuidToDataSourceProps = new HashMap<>();
+        uuidToDataSourceProps.putAll(readIdeaConfig(pathToIdeaFolder + "/dataSources.xml", encoding));
 
-        for (int i = 0; i < allElements.getLength(); i++) {
-            Node element = allElements.item(i);
-            NamedNodeMap attrs = element.getAttributes();
-            for (int j = 0; j < attrs.getLength(); j++) {
-                Attr attr = (Attr) attrs.item(i);
-                if(attr == null) continue;
-                String key = String.format("%s.%s", element.getNodeName(), attr.getName());
-                //fixme there could be overriding for two independence item with same name and tag
-                conProps.put(key, attr.getValue());
+        Map<String, Map<String, String>> uuidToDataSourceFromDifferentXml = readIdeaConfig(pathToIdeaFolder + "/dataSources.local.xml", encoding);
+        //merge two maps of maps
+        for (Map.Entry<String, Map<String, String>> uuidToDataSourceEntry : uuidToDataSourceProps.entrySet()) {
+            Map<String, String> dataSourceProps = uuidToDataSourceProps.get(uuidToDataSourceEntry.getKey());
+            if (dataSourceProps == null) {
+                log.warn("Unexpectedly found data source properties for " + uuidToDataSourceEntry.getKey());
+                dataSourceProps = new HashMap<>();
             }
-            //fixme only first node
-            if (element.hasChildNodes()) {
-                conProps.put(element.getNodeName(), element.getChildNodes().item(0).getNodeValue());
-            }
+            dataSourceProps.putAll(uuidToDataSourceFromDifferentXml.get(uuidToDataSourceEntry.getKey()));
         }
-        return conProps;
+        return uuidToDataSourceProps;
     }
 
     public ImportConnectionInfo buildIdeaConnectionFromProps(Map<String, String> conProps) {
 
-        //todo to think about JAXB unmarshaller
         ImportDriverInfo driverInfo = buildDriverInfo(conProps);
         String url = conProps.get("jdbc-url");
         URI uri = parseURL(url);
@@ -87,6 +81,51 @@ public class IdeaDataSourceConfigService {
         return connectionInfo;
     }
 
+    private Map<String, Map<String, String>> readIdeaConfig(String fileName, String encoding) throws Exception {
+
+        try (InputStream dataSourceXmlIs = new FileInputStream(fileName)) {
+            try (Reader reader = new InputStreamReader(dataSourceXmlIs, encoding)) {
+                return importXML(reader);
+            }
+        }
+    }
+
+    private Map<String, Map<String, String>> importXML(Reader reader) throws XMLException {
+        Document document = XMLUtils.parseDocument(reader);
+        Map<String, String> conProps = new HashMap<>();
+        Map<String, Map<String, String>> uuidToDatasourceProps = new HashMap<>();
+        // * - for getting all element
+        NodeList allElements = document.getElementsByTagName("*");
+        if (allElements.getLength() == 0) {
+            throw new ImportConfigurationException("No elements found");
+        }
+
+        String uuid = null;
+        for (int i = 0; i < allElements.getLength(); i++) {
+            Node element = allElements.item(i);
+            if (DATASOURCE_TAG.equals(element.getNodeName())) {
+                if (uuid != null) {
+                    uuidToDatasourceProps.put(uuid, conProps);
+                }
+                String uuidOfNewDataSource = element.getAttributes().getNamedItem("uuid").getNodeValue();
+                conProps = uuidToDatasourceProps.getOrDefault(uuidOfNewDataSource, new HashMap<>());
+                uuid = uuidOfNewDataSource;
+            }
+            NamedNodeMap attrs = element.getAttributes();
+            for (int j = 0; j < attrs.getLength(); j++) {
+                Attr attr = (Attr) attrs.item(j);
+                if (attr == null) continue;
+                String key = String.format("%s.%s", element.getNodeName(), attr.getName());
+                conProps.put(key, attr.getValue());
+            }
+            if (XMLUtils.isNodeHasTextValue(element)) {
+                conProps.put(element.getNodeName(), element.getChildNodes().item(0).getNodeValue());
+            }
+        }
+        uuidToDatasourceProps.put(uuid, conProps);
+        return uuidToDatasourceProps;
+    }
+
     private URI parseURL(String url) {
         String cleanURI = url.substring(5);
         return URI.create(cleanURI);
@@ -95,6 +134,7 @@ public class IdeaDataSourceConfigService {
     private ImportDriverInfo buildDriverInfo(Map<String, String> conProps) {
 //        ImportDriverInfo driverInfo = new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(),
 //                driver.getDriverClassName());
+//        conProps.get("jdbc-driver")
         //todo to determinate the driver
         return new ImportDriverInfo("postgres-jdbc",
                 "PostgreSQL",

@@ -22,13 +22,10 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.import_config.wizards.ConfigImportWizardPage;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportConnectionInfo;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportData;
-import org.jkiss.dbeaver.ext.import_config.wizards.ImportDriverInfo;
 import org.jkiss.dbeaver.ext.import_config.wizards.idea.ConfigImportWizardIdea;
 import org.jkiss.dbeaver.ext.import_config.wizards.idea.IdeaDataSourceConfigService;
-import org.jkiss.dbeaver.model.connection.DBPDriver;
 
-import java.io.*;
-import java.util.HashMap;
+import java.io.File;
 import java.util.Map;
 
 
@@ -56,34 +53,18 @@ public class ConfigImportWizardPageIdeaConnections extends ConfigImportWizardPag
     private void tryLoadConnection(ImportData importData) throws Exception {
 
         ConfigImportWizardIdea wizard = (ConfigImportWizardIdea) getWizard();
-        final DBPDriver driver = wizard.getDriver();
-        ImportDriverInfo driverInfo = new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(), driver.getDriverClassName());
-        importData.addDriver(driverInfo);
+//        final DBPDriver driver = wizard.getDriver();
+//        ImportDriverInfo driverInfo = new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(), driver.getDriverClassName());
+//        importData.addDriver(driverInfo);
 
         //fixme other OS??
         File ideaDirectory = wizard.getInputFile();
-        Map<String, String> dataSourceProps = buildIdeaConfigProps(ideaDirectory.getPath(), wizard.getInputFileEncoding());
-        ImportConnectionInfo connectionInfo = ideaDataSourceConfigService.buildIdeaConnectionFromProps(dataSourceProps);
-        importData.addDriver(connectionInfo.getDriverInfo());
-        importData.addConnection(connectionInfo);
-    }
-
-    private Map<String, String> buildIdeaConfigProps(String path, String encoding) throws Exception {
-        Map<String, String> dataSourceProps = new HashMap<>();
-        dataSourceProps.putAll(readIdeaConfig(path + "/dataSources.xml",
-                encoding));
-        dataSourceProps.putAll(readIdeaConfig(path + "/dataSources.local.xml",
-                encoding));
-        return dataSourceProps;
-    }
-
-    private Map<String, String> readIdeaConfig(String fileName, String encoding) throws Exception {
-
-        try (InputStream dataSourceXmlIs = new FileInputStream(fileName)) {
-            try (Reader reader = new InputStreamReader(dataSourceXmlIs, encoding)) {
-                return ideaDataSourceConfigService.importXML(reader);
-            }
+        Map<String, Map<String, String>> uuidToDataSourceProps = ideaDataSourceConfigService.buildIdeaConfigProps(
+                ideaDirectory.getPath(), wizard.getInputFileEncoding());
+        for (Map<String, String> dataSourceProps : uuidToDataSourceProps.values()) {
+            ImportConnectionInfo connectionInfo = ideaDataSourceConfigService.buildIdeaConnectionFromProps(dataSourceProps);
+            importData.addDriver(connectionInfo.getDriverInfo());
+            importData.addConnection(connectionInfo);
         }
     }
-
 }
