@@ -118,7 +118,7 @@ public class IdeaDataSourceConfigService {
                 String key = String.format("%s.%s", element.getNodeName(), attr.getName());
                 conProps.put(key, attr.getValue());
             }
-            if (XMLUtils.isNodeHasTextValue(element)) {
+            if (isNodeHasTextValue(element)) {
                 conProps.put(element.getNodeName(), element.getChildNodes().item(0).getNodeValue());
             }
         }
@@ -129,6 +129,11 @@ public class IdeaDataSourceConfigService {
     private URI parseURL(String url) {
         String cleanURI = url.substring(5);
         return URI.create(cleanURI);
+    }
+
+    private static boolean isNodeHasTextValue(Node element) {
+        return element.hasChildNodes() && element.getChildNodes().getLength() > 0 &&
+                !element.getChildNodes().item(0).getNodeValue().isBlank();
     }
 
     private ImportDriverInfo buildDriverInfo(Map<String, String> conProps) {
