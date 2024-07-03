@@ -16,10 +16,15 @@
  */
 package org.jkiss.dbeaver.ext.import_config.wizards.idea;
 
+import org.jkiss.code.Nullable;
 import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportConfigurationException;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportConnectionInfo;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportDriverInfo;
+import org.jkiss.dbeaver.model.connection.DBPDriver;
+import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
+import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
+import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
 import org.jkiss.utils.xml.XMLException;
 import org.jkiss.utils.xml.XMLUtils;
 import org.w3c.dom.*;
@@ -29,7 +34,9 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.net.URI;
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 public class IdeaDataSourceConfigService {
@@ -38,6 +45,7 @@ public class IdeaDataSourceConfigService {
     private static final Log log = Log.getLog(IdeaDataSourceConfigService.class);
 
     private static final String DATASOURCE_TAG = "data-source";
+    private static final String PROPERTIES_TAG = "property";
 
     private IdeaDataSourceConfigService() {
     }
@@ -103,15 +111,20 @@ public class IdeaDataSourceConfigService {
         String uuid = null;
         for (int i = 0; i < allElements.getLength(); i++) {
             Node element = allElements.item(i);
+            NamedNodeMap attrs = element.getAttributes();
             if (DATASOURCE_TAG.equals(element.getNodeName())) {
                 if (uuid != null) {
                     uuidToDatasourceProps.put(uuid, conProps);
                 }
-                String uuidOfNewDataSource = element.getAttributes().getNamedItem("uuid").getNodeValue();
+                String uuidOfNewDataSource = attrs.getNamedItem("uuid").getNodeValue();
                 conProps = uuidToDatasourceProps.getOrDefault(uuidOfNewDataSource, new HashMap<>());
                 uuid = uuidOfNewDataSource;
             }
-            NamedNodeMap attrs = element.getAttributes();
+            if (PROPERTIES_TAG.equals(element.getNodeName())) {
+                Node value = attrs.getNamedItem("value");
+                conProps.put(attrs.getNamedItem("name").getNodeValue(), value == null ? "" : value.getNodeValue());
+            }
+
             for (int j = 0; j < attrs.getLength(); j++) {
                 Attr attr = (Attr) attrs.item(j);
                 if (attr == null) continue;
@@ -137,14 +150,82 @@ public class IdeaDataSourceConfigService {
     }
 
     private ImportDriverInfo buildDriverInfo(Map<String, String> conProps) {
-//        ImportDriverInfo driverInfo = new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(),
-//                driver.getDriverClassName());
-//        conProps.get("jdbc-driver")
-        //todo to determinate the driver
-        return new ImportDriverInfo("postgres-jdbc",
-                "PostgreSQL",
-                "jdbc:postgresql://{host}[:{port}]/[{database}]",
-                "org.postgresql.Driver");
 
+        String name = conProps.get("database-info.dbms");
+        String refDriverName = conProps.get("driver-ref");
+
+        //todo to think about predefine map from idea name to our driver for exceptional case
+        DBPDriver driver = findDriver(name, refDriverName);
+        if (driver == null) {
+
+            //try 2
+            driver = tryFindDriverByToken(name);
+            if (driver != null) return new ImportDriverInfo(driver);
+
+            //try 3
+            driver = tryExtractDriverByUrl(conProps.get("jdbc-url"));
+            if (driver != null) return new ImportDriverInfo(driver);
+
+            //fixme mock
+            return new ImportDriverInfo("postgres-jdbc",
+                    "PostgreSQL",
+                    "jdbc:postgresql://{host}[:{port}]/[{database}]",
+                    "org.postgresql.Driver");
+        } else {
+            return new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(),
+                    driver.getDriverClassName());
+        }
+    }
+
+    private DBPDriver tryExtractDriverByUrl(String url) {
+
+        URI uri = parseURL(url);
+        String scheme = uri.getScheme();
+        return findDriver(scheme, null);
+    }
+
+    private @Nullable DBPDriver tryFindDriverByToken(String name) {
+        DBPDriver driver;
+        List<String> nameTokens = Arrays.stream(name.split("_")).toList();
+        if (nameTokens.size() > 1) {
+            for (String nameToken : nameTokens) {
+                driver = findDriver(nameToken, null);
+                if (driver != null) {
+                    return driver;
+                }
+            }
+        }
+        return null;
+    }
+
+    private DBPDriver findDriver(String name, String refDriverName) {
+        DataSourceProviderRegistry dataSourceProviderRegistry = DataSourceProviderRegistry.getInstance();
+        List<DataSourceProviderDescriptor> dataSourceProviders = dataSourceProviderRegistry.getDataSourceProviders();
+        for (DataSourceProviderDescriptor dataSourceProvider : dataSourceProviders) {
+            List<DriverDescriptor> drivers = dataSourceProvider.getDrivers();
+            for (DriverDescriptor driver : drivers) {
+                if (driver.getName().equalsIgnoreCase(name) || driver.getId().equalsIgnoreCase(name)
+                        || driver.getName().equalsIgnoreCase(refDriverName)
+                        || driver.getId().equalsIgnoreCase(refDriverName)) {
+                    while (driver.getReplacedBy() != null) {
+                        driver = driver.getReplacedBy();
+                    }
+                    return driver;
+                }
+            }
+            if (dataSourceProvider.getId().equalsIgnoreCase(name)
+                    || dataSourceProvider.getName().equalsIgnoreCase(name)
+                    || dataSourceProvider.getId().equalsIgnoreCase(refDriverName)
+                    || dataSourceProvider.getName().equalsIgnoreCase(refDriverName)) {
+                if(!drivers.isEmpty()){
+                    DriverDescriptor driverDescriptor = drivers.get(0);
+                    while (driverDescriptor.getReplacedBy() != null) {
+                        driverDescriptor =  driverDescriptor.getReplacedBy();
+                    }
+                    return driverDescriptor;
+                }
+            }
+        }
+        return null;
     }
 }

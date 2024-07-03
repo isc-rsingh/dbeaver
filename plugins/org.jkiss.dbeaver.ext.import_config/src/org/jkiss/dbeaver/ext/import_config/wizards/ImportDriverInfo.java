@@ -17,6 +17,8 @@
 
 package org.jkiss.dbeaver.ext.import_config.wizards;
 
+import org.jkiss.dbeaver.model.connection.DBPDriver;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -42,6 +44,13 @@ public class ImportDriverInfo {
         this.name = name;
         this.sampleURL = sampleURL;
         this.driverClass = driverClass;
+    }
+
+    public ImportDriverInfo(DBPDriver driver) {
+        this.id = driver.getId();
+        this.name = driver.getName();
+        this.sampleURL = driver.getSampleURL();
+        this.driverClass = driver.getDriverClassName();
     }
 
     public String getId()

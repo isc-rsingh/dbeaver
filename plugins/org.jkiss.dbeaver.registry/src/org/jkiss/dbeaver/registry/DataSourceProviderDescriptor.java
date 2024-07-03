@@ -391,6 +391,20 @@ public class DataSourceProviderDescriptor extends AbstractDescriptor implements 
         return null;
     }
 
+    @Nullable
+    //fixme
+    public DriverDescriptor getDriverIgnoreCase(@NotNull String name) {
+        for (DriverDescriptor driver : drivers) {
+            if (driver.getName().equalsIgnoreCase(name)) {
+                while (driver.getReplacedBy() != null) {
+                    driver = driver.getReplacedBy();
+                }
+                return driver;
+            }
+        }
+        return null;
+    }
+
     /**
      * Retrieves a driver by the given {@code id}.
      *
