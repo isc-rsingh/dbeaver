@@ -21,6 +21,9 @@ import org.jkiss.dbeaver.Log;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportConfigurationException;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportConnectionInfo;
 import org.jkiss.dbeaver.ext.import_config.wizards.ImportDriverInfo;
+import org.jkiss.dbeaver.ext.import_config.wizards.idea.postprocessor.api.IdeaImportConfigPostProcessor;
+import org.jkiss.dbeaver.ext.import_config.wizards.idea.postprocessor.impl.BigQueryIdeaImportConfigPostProcessor;
+import org.jkiss.dbeaver.ext.import_config.wizards.idea.postprocessor.impl.OracleIdeaImportPostProcessor;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
@@ -47,11 +50,22 @@ public class IdeaDataSourceConfigService {
     private static final String DATASOURCE_TAG = "data-source";
     private static final String PROPERTIES_TAG = "property";
 
+    private final Map<String, IdeaImportConfigPostProcessor> postProcessors = new HashMap<>();
+
     private IdeaDataSourceConfigService() {
+
+        //fixme there is need registry all implementation of IdeaImportConfigPostProcessor.
+        //to think how it can be separated
+        BigQueryIdeaImportConfigPostProcessor bigQueryPostProcessor = new BigQueryIdeaImportConfigPostProcessor();
+        postProcessors.put(bigQueryPostProcessor.getHandledDriverId(), bigQueryPostProcessor);
+
+        OracleIdeaImportPostProcessor oracleIdeaImportPostProcessor = new OracleIdeaImportPostProcessor();
+        postProcessors.put(oracleIdeaImportPostProcessor.getHandledDriverId(), oracleIdeaImportPostProcessor);
     }
 
     public Map<String, Map<String, String>> buildIdeaConfigProps(String pathToIdeaFolder, String encoding) throws Exception {
         Map<String, Map<String, String>> uuidToDataSourceProps = new HashMap<>();
+        //fixme path for other OS
         uuidToDataSourceProps.putAll(readIdeaConfig(pathToIdeaFolder + "/dataSources.xml", encoding));
 
         Map<String, Map<String, String>> uuidToDataSourceFromDifferentXml = readIdeaConfig(pathToIdeaFolder + "/dataSources.local.xml", encoding);
@@ -79,12 +93,15 @@ public class IdeaDataSourceConfigService {
                 url,
                 uri.getHost(),
                 String.valueOf(uri.getPort()),
-                //fixme database
-                "postgres",
+                "",
                 conProps.get("user-name"),
                 ""
         );
 
+        IdeaImportConfigPostProcessor postProcessor = postProcessors.get(driverInfo.getId());
+        if (postProcessor != null) {
+            postProcessor.postProcess(connectionInfo, conProps);
+        }
         log.debug("load connection: " + connectionInfo);
         return connectionInfo;
     }
@@ -122,7 +139,9 @@ public class IdeaDataSourceConfigService {
             }
             if (PROPERTIES_TAG.equals(element.getNodeName())) {
                 Node value = attrs.getNamedItem("value");
-                conProps.put(attrs.getNamedItem("name").getNodeValue(), value == null ? "" : value.getNodeValue());
+                String name = attrs.getNamedItem("name").getNodeValue();
+                if (name.startsWith("com.intellij")) continue;
+                conProps.put(name, value == null ? "" : value.getNodeValue());
             }
 
             for (int j = 0; j < attrs.getLength(); j++) {
@@ -217,10 +236,10 @@ public class IdeaDataSourceConfigService {
                     || dataSourceProvider.getName().equalsIgnoreCase(name)
                     || dataSourceProvider.getId().equalsIgnoreCase(refDriverName)
                     || dataSourceProvider.getName().equalsIgnoreCase(refDriverName)) {
-                if(!drivers.isEmpty()){
+                if (!drivers.isEmpty()) {
                     DriverDescriptor driverDescriptor = drivers.get(0);
                     while (driverDescriptor.getReplacedBy() != null) {
-                        driverDescriptor =  driverDescriptor.getReplacedBy();
+                        driverDescriptor = driverDescriptor.getReplacedBy();
                     }
                     return driverDescriptor;
                 }
