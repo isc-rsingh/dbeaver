@@ -57,7 +57,7 @@
                 class="org.jkiss.dbeaver.ext.import_config.wizards.idea.ConfigImportWizardIdea"
                 id="org.jkiss.dbeaver.import_config.custom"
                 name="IDEA"
-                icon="icons/custom.png">
+                icon="icons/idea.png">
             <description>Import from IDEA</description>
         </wizard>
     </extension>

@@ -42,13 +42,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.jkiss.dbeaver.ext.import_config.wizards.idea.IdeaConfigXMLConstant.*;
+
 public class IdeaDataSourceConfigService {
 
     public static final IdeaDataSourceConfigService INSTANCE = new IdeaDataSourceConfigService();
     private static final Log log = Log.getLog(IdeaDataSourceConfigService.class);
-
-    private static final String DATASOURCE_TAG = "data-source";
-    private static final String PROPERTIES_TAG = "property";
 
     private final Map<String, IdeaImportConfigPostProcessor> postProcessors = new HashMap<>();
 
@@ -84,7 +83,7 @@ public class IdeaDataSourceConfigService {
     public ImportConnectionInfo buildIdeaConnectionFromProps(Map<String, String> conProps) {
 
         ImportDriverInfo driverInfo = buildDriverInfo(conProps);
-        String url = conProps.get("jdbc-url");
+        String url = conProps.get(JDBC_URL.getTagName());
         URI uri = parseURL(url);
         ImportConnectionInfo connectionInfo = new ImportConnectionInfo(
                 driverInfo,
@@ -129,18 +128,18 @@ public class IdeaDataSourceConfigService {
         for (int i = 0; i < allElements.getLength(); i++) {
             Node element = allElements.item(i);
             NamedNodeMap attrs = element.getAttributes();
-            if (DATASOURCE_TAG.equals(element.getNodeName())) {
+            if (DATASOURCE_TAG.getTagName().equals(element.getNodeName())) {
                 if (uuid != null) {
                     uuidToDatasourceProps.put(uuid, conProps);
                 }
-                String uuidOfNewDataSource = attrs.getNamedItem("uuid").getNodeValue();
+                String uuidOfNewDataSource = attrs.getNamedItem(UUID_ATTRIBUTE.getTagName()).getNodeValue();
                 conProps = uuidToDatasourceProps.getOrDefault(uuidOfNewDataSource, new HashMap<>());
                 uuid = uuidOfNewDataSource;
             }
-            if (PROPERTIES_TAG.equals(element.getNodeName())) {
+            if (PROPERTIES_TAG.getTagName().equals(element.getNodeName())) {
                 Node value = attrs.getNamedItem("value");
                 String name = attrs.getNamedItem("name").getNodeValue();
-                if (name.startsWith("com.intellij")) continue;
+                if (name.startsWith(INTELIJ_CUSTOM_VALUE.getTagName())) continue;
                 conProps.put(name, value == null ? "" : value.getNodeValue());
             }
 
@@ -170,30 +169,18 @@ public class IdeaDataSourceConfigService {
 
     private ImportDriverInfo buildDriverInfo(Map<String, String> conProps) {
 
-        String name = conProps.get("database-info.dbms");
-        String refDriverName = conProps.get("driver-ref");
+        String name = conProps.get(DATABASE_NAME_PATH.getTagName());
+        String refDriverName = conProps.get(DRIVER_REF.getTagName());
 
         //todo to think about predefine map from idea name to our driver for exceptional case
         DBPDriver driver = findDriver(name, refDriverName);
         if (driver == null) {
-
-            //try 2
             driver = tryFindDriverByToken(name);
-            if (driver != null) return new ImportDriverInfo(driver);
-
-            //try 3
-            driver = tryExtractDriverByUrl(conProps.get("jdbc-url"));
-            if (driver != null) return new ImportDriverInfo(driver);
-
-            //fixme mock
-            return new ImportDriverInfo("postgres-jdbc",
-                    "PostgreSQL",
-                    "jdbc:postgresql://{host}[:{port}]/[{database}]",
-                    "org.postgresql.Driver");
-        } else {
-            return new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(),
-                    driver.getDriverClassName());
+            if (driver == null) {
+                driver = tryExtractDriverByUrl(conProps.get(JDBC_URL.getTagName()));
+            }
         }
+        return new ImportDriverInfo(driver);
     }
 
     private DBPDriver tryExtractDriverByUrl(String url) {

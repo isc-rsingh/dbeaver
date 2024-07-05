@@ -37,7 +37,6 @@ import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
 import org.jkiss.dbeaver.runtime.DBWorkbench;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.navigator.NavigatorUtils;
-import org.jkiss.dbeaver.ui.navigator.dialogs.ObjectListDialog;
 import org.jkiss.utils.CommonUtils;
 
 import java.util.ArrayList;
@@ -149,21 +148,17 @@ public abstract class ConfigImportWizard extends Wizard implements IImportWizard
             driver.setModified(true);
             genericProvider.addDriver(driver);
             connectionInfo.setDriver(driver);
-        } else if (matchedDrivers.size() == 1) {
-            // Use the only found driver
-            driver = matchedDrivers.get(0);
-            connectionInfo.setDriver(driver);
         } else {
-            // Let user to choose correct driver
-            driver = ObjectListDialog.selectObject(
-                getShell(), "Choose driver for connection '" + connectionInfo.getAlias() + "'", "ImportDriverSelector", matchedDrivers);
-            if (driver == null) {
-                return false;
-            }
+            // Use the only found driver
+            driver = matchedDrivers.stream()
+                    .filter(driverDescriptor -> driverDescriptor.getName().equalsIgnoreCase(driverInfo.getName()))
+                    .findFirst()
+                    .orElse(matchedDrivers.get(0));
             connectionInfo.setDriver(driver);
         }
 
         if (driver != null) {
+            //fixme driverClassName is not uniq
             driverClassMap.put(driver.getDriverClassName(), driver);
             return true;
         }

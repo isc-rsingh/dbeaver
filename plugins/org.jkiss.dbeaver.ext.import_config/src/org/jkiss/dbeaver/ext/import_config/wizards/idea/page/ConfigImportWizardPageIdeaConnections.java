@@ -53,11 +53,6 @@ public class ConfigImportWizardPageIdeaConnections extends ConfigImportWizardPag
     private void tryLoadConnection(ImportData importData) throws Exception {
 
         ConfigImportWizardIdea wizard = (ConfigImportWizardIdea) getWizard();
-//        final DBPDriver driver = wizard.getDriver();
-//        ImportDriverInfo driverInfo = new ImportDriverInfo(driver.getId(), driver.getName(), driver.getSampleURL(), driver.getDriverClassName());
-//        importData.addDriver(driverInfo);
-
-        //fixme other OS??
         File ideaDirectory = wizard.getInputFile();
         Map<String, Map<String, String>> uuidToDataSourceProps = ideaDataSourceConfigService.buildIdeaConfigProps(
                 ideaDirectory.getPath(), wizard.getInputFileEncoding());
