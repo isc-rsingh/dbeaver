@@ -25,13 +25,8 @@ import java.io.File;
 
 public class ConfigImportWizardIdea extends ConfigImportWizard {
 
-    //private ConfigImportWizardPageIdeaDriver pageDriver;
-    private ConfigImportWizardPageIdesSettings pageSettings;
 
-    public enum ImportType {
-        CSV,
-        XML
-    }
+    private ConfigImportWizardPageIdesSettings pageSettings;
 
     @Override
     protected ConfigImportWizardPageIdeaConnections createMainPage() {
@@ -40,20 +35,14 @@ public class ConfigImportWizardIdea extends ConfigImportWizard {
 
     @Override
     public void addPages() {
-        //pageDriver = new ConfigImportWizardPageIdeaDriver();
         pageSettings = new ConfigImportWizardPageIdesSettings();
 
-       // addPage(pageDriver);
         addPage(pageSettings);
         super.addPages();
     }
 
     public DBPDriver getDriver() {
         return null;
-    }
-
-    public ConfigImportWizardIdea.ImportType getImportType() {
-        return pageSettings.getImportType();
     }
 
     public File getInputFile() {

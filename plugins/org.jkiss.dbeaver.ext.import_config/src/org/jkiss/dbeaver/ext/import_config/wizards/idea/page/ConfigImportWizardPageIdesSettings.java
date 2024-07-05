@@ -21,10 +21,8 @@ import org.eclipse.jface.wizard.WizardPage;
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
 import org.eclipse.swt.layout.GridLayout;
-import org.eclipse.swt.widgets.Button;
 import org.eclipse.swt.widgets.Combo;
 import org.eclipse.swt.widgets.Composite;
-import org.jkiss.dbeaver.ext.import_config.wizards.idea.ConfigImportWizardIdea;
 import org.jkiss.dbeaver.ui.UIUtils;
 import org.jkiss.dbeaver.ui.controls.TextWithOpenFile;
 import org.jkiss.dbeaver.ui.controls.TextWithOpenFolder;
@@ -35,8 +33,6 @@ import java.io.File;
 public class ConfigImportWizardPageIdesSettings extends WizardPage {
 
     private TextWithOpenFile filePathText;
-    private Button xmlButton;
-    private Button csvButton;
     private File inputFile;
     private Combo encodingCombo;
 
@@ -52,14 +48,6 @@ public class ConfigImportWizardPageIdesSettings extends WizardPage {
     {
         Composite placeholder = new Composite(parent, SWT.NONE);
         placeholder.setLayout(new GridLayout(1, true));
-
-//        Composite typeGroup = UIUtils.createControlGroup(placeholder, "Input type", 2, GridData.FILL_HORIZONTAL,
-//                SWT.DEFAULT);
-//        xmlButton = new Button(typeGroup, SWT.RADIO);
-//        xmlButton.setText("XML");
-//        xmlButton.setSelection(true);
-//        csvButton = new Button(typeGroup, SWT.RADIO);
-//        csvButton.setText("CSV");
 
         UIUtils.createControlLabel(placeholder, "Input file");
         filePathText = new TextWithOpenFolder(placeholder, "Configuration Input Folder");
@@ -77,15 +65,6 @@ public class ConfigImportWizardPageIdesSettings extends WizardPage {
         UIUtils.createControlLabel(placeholder, "File encoding");
         encodingCombo = UIUtils.createEncodingCombo(placeholder, GeneralUtils.DEFAULT_ENCODING);
 
-        /*
-         * final SelectionAdapter typeListener = new SelectionAdapter() {
-         * 
-         * @Override public void widgetSelected(SelectionEvent e) { boolean
-         * isCSV = csvButton.getSelection(); } };
-         * csvButton.addSelectionListener(typeListener);
-         * xmlButton.addSelectionListener(typeListener);
-         */
-
         setControl(placeholder);
     }
 
@@ -93,12 +72,6 @@ public class ConfigImportWizardPageIdesSettings extends WizardPage {
     public boolean isPageComplete()
     {
         return inputFile != null && inputFile.exists();
-    }
-
-    public ConfigImportWizardIdea.ImportType getImportType()
-    {
-        return csvButton.getSelection() ? ConfigImportWizardIdea.ImportType.CSV
-                : ConfigImportWizardIdea.ImportType.XML;
     }
 
     public File getInputFile()

@@ -28,19 +28,21 @@ import org.jkiss.dbeaver.model.connection.DBPDriver;
 import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
+import org.jkiss.dbeaver.utils.RuntimeUtils;
 import org.jkiss.utils.xml.XMLException;
 import org.jkiss.utils.xml.XMLUtils;
 import org.w3c.dom.*;
 
-import java.io.FileInputStream;
-import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.io.Reader;
+import java.io.*;
 import java.net.URI;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 import static org.jkiss.dbeaver.ext.import_config.wizards.idea.IdeaConfigXMLConstant.*;
 
@@ -69,6 +71,24 @@ public class IdeaDataSourceConfigService {
 
         Map<String, Map<String, String>> uuidToDataSourceFromDifferentXml = readIdeaConfig(pathToIdeaFolder + "/dataSources.local.xml", encoding);
         //merge two maps of maps
+        uuidToDataSourceProps = mergeTwoMapProps(uuidToDataSourceProps, uuidToDataSourceFromDifferentXml);
+
+        Map<String, String> uuidToSshConfigMap = tryReadIdeaSshConfig(
+                RuntimeUtils.getWorkingDirectory("JetBrains"));
+        return uuidToDataSourceProps;
+    }
+
+    private Map<String, String> tryReadIdeaSshConfig(String pathToJetBrainsHomeDirectory) {
+        try {
+            return readIdeaSshConfig(pathToJetBrainsHomeDirectory);
+        } catch (Exception e) {
+            //can't read ssh config, move on
+            log.warn("Could not read Idea ssh config", e);
+        }
+        return null;
+    }
+
+    private Map<String, Map<String, String>> mergeTwoMapProps(Map<String, Map<String, String>> uuidToDataSourceProps, Map<String, Map<String, String>> uuidToDataSourceFromDifferentXml) {
         for (Map.Entry<String, Map<String, String>> uuidToDataSourceEntry : uuidToDataSourceProps.entrySet()) {
             Map<String, String> dataSourceProps = uuidToDataSourceProps.get(uuidToDataSourceEntry.getKey());
             if (dataSourceProps == null) {
@@ -78,6 +98,27 @@ public class IdeaDataSourceConfigService {
             dataSourceProps.putAll(uuidToDataSourceFromDifferentXml.get(uuidToDataSourceEntry.getKey()));
         }
         return uuidToDataSourceProps;
+    }
+
+    private Map<String, String> readIdeaSshConfig(String pathToIdeaFolder) throws IOException {
+
+        String pathToSshFile = "\\options\\sshConfigs.xml";
+        try (Stream<Path> paths = Files.walk(Paths.get(pathToIdeaFolder))) {
+            List<Path> ideaFolders = paths
+                    .filter(Files::isDirectory)
+                    .filter(file -> file.getFileName().toString().toLowerCase().contains("idea"))
+                    .peek(System.out::println)
+                    .toList();
+
+            for (Path ideaFolder : ideaFolders) {
+                File sshFile = new File(ideaFolder.toFile().getAbsolutePath() + pathToSshFile);
+                if(sshFile.exists()) {
+
+                }
+            }
+        }
+
+        return null;
     }
 
     public ImportConnectionInfo buildIdeaConnectionFromProps(Map<String, String> conProps) {
