@@ -20,23 +20,33 @@ public enum IdeaConfigXMLConstant {
 
     DATASOURCE_TAG("data-source"),
     PROPERTIES_TAG("property"),
-    JDBC_URL("jdbc-url"),
-    DRIVER_REF("driver-ref"),
+    JDBC_URL_TAG("jdbc-url"),
+    DRIVER_REF_TAG("driver-ref"),
     UUID_ATTRIBUTE("uuid"),
+    SSH_CONFIG_TAG("sshConfig"),
+    SSH_PROPERTIES_TAG("ssh-properties"),
 
 
     DATABASE_NAME_PATH("database-info.dbms"),
+    SSH_PROPERTIES_ENABLE_PATH("ssh-properties.enable"),
+    SSH_PROPERTIES_UUID_PATH("ssh-properties.ssh-config-id"),
+    USERNAME_PATH("user-name"),
+    SSH_HOST_PATH("sshConfig.host"),
+    SSH_KEY_FILE_PATH("sshConfig.keyPath"),
+    SSH_PORT_PATH("sshConfig.port"),
+    SSH_USERNAME_PATH("sshConfig.username"),
+
 
     INTELIJ_CUSTOM_VALUE("com.intellij"),
     ;
-    private final String tagName;
+    private final String value;
 
-    IdeaConfigXMLConstant(String tagName) {
-        this.tagName = tagName;
+    IdeaConfigXMLConstant(String value) {
+        this.value = value;
     }
 
-    public String getTagName() {
-        return tagName;
+    public String getValue() {
+        return value;
     }
 
 }

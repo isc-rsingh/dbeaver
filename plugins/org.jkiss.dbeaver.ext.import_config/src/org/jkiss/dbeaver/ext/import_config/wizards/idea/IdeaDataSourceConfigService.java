@@ -25,10 +25,14 @@ import org.jkiss.dbeaver.ext.import_config.wizards.idea.postprocessor.api.IdeaIm
 import org.jkiss.dbeaver.ext.import_config.wizards.idea.postprocessor.impl.BigQueryIdeaImportConfigPostProcessor;
 import org.jkiss.dbeaver.ext.import_config.wizards.idea.postprocessor.impl.OracleIdeaImportPostProcessor;
 import org.jkiss.dbeaver.model.connection.DBPDriver;
+import org.jkiss.dbeaver.model.net.DBWHandlerConfiguration;
 import org.jkiss.dbeaver.registry.DataSourceProviderDescriptor;
 import org.jkiss.dbeaver.registry.DataSourceProviderRegistry;
 import org.jkiss.dbeaver.registry.driver.DriverDescriptor;
+import org.jkiss.dbeaver.registry.network.NetworkHandlerDescriptor;
+import org.jkiss.dbeaver.registry.network.NetworkHandlerRegistry;
 import org.jkiss.dbeaver.utils.RuntimeUtils;
+import org.jkiss.utils.CommonUtils;
 import org.jkiss.utils.xml.XMLException;
 import org.jkiss.utils.xml.XMLUtils;
 import org.w3c.dom.*;
@@ -70,15 +74,75 @@ public class IdeaDataSourceConfigService {
         uuidToDataSourceProps.putAll(readIdeaConfig(pathToIdeaFolder + "/dataSources.xml", encoding));
 
         Map<String, Map<String, String>> uuidToDataSourceFromDifferentXml = readIdeaConfig(pathToIdeaFolder + "/dataSources.local.xml", encoding);
-        //merge two maps of maps
         uuidToDataSourceProps = mergeTwoMapProps(uuidToDataSourceProps, uuidToDataSourceFromDifferentXml);
 
-        Map<String, String> uuidToSshConfigMap = tryReadIdeaSshConfig(
-                RuntimeUtils.getWorkingDirectory("JetBrains"));
+        Map<String, Map<String, String>> sshIdToSshConfigMap = tryReadIdeaSshConfig(
+            RuntimeUtils.getWorkingDirectory("JetBrains"));
+        uuidToDataSourceProps = mergeSshConfigToIdeaConfigMap(uuidToDataSourceProps, sshIdToSshConfigMap);
         return uuidToDataSourceProps;
     }
 
-    private Map<String, String> tryReadIdeaSshConfig(String pathToJetBrainsHomeDirectory) {
+    public ImportConnectionInfo buildIdeaConnectionFromProps(Map<String, String> conProps) {
+
+        ImportDriverInfo driverInfo = buildDriverInfo(conProps);
+        String url = conProps.get(JDBC_URL_TAG.getValue());
+        URI uri = parseURL(url);
+        ImportConnectionInfo connectionInfo = new ImportConnectionInfo(
+            driverInfo,
+            conProps.get("data-source.uuid"),
+            conProps.get("data-source.name"),
+            url,
+            uri.getHost(),
+            String.valueOf(uri.getPort()),
+            "",
+            conProps.get("user-name"),
+            ""
+        );
+
+        configureSshConfig(connectionInfo, conProps);
+        IdeaImportConfigPostProcessor postProcessor = postProcessors.get(driverInfo.getId());
+        if (postProcessor != null) {
+            postProcessor.postProcess(connectionInfo, conProps);
+        }
+        log.debug("load connection: " + connectionInfo);
+        return connectionInfo;
+    }
+
+    private void configureSshConfig(ImportConnectionInfo connectionInfo, Map<String, String> conProps) {
+
+        NetworkHandlerDescriptor sslHD = NetworkHandlerRegistry.getInstance().getDescriptor("ssh_tunnel");
+        DBWHandlerConfiguration sshHandler = new DBWHandlerConfiguration(sslHD, null);
+        sshHandler.setUserName(conProps.get(SSH_USERNAME_PATH.getValue()));
+        sshHandler.setSavePassword(true);
+        sshHandler.setProperty(DBWHandlerConfiguration.PROP_HOST, conProps.get(SSH_HOST_PATH.getValue()));
+        sshHandler.setProperty(DBWHandlerConfiguration.PROP_PORT, conProps.get(SSH_PORT_PATH.getValue()));
+
+        if (!CommonUtils.isEmpty(conProps.get(SSH_KEY_FILE_PATH.getValue()))) {
+            sshHandler.setProperty("authType", "PUBLIC_KEY");
+            sshHandler.setProperty("keyPath", conProps.get(SSH_KEY_FILE_PATH.getValue()));
+        }
+        sshHandler.setProperty("implementation", "sshj");
+        sshHandler.setEnabled(true);
+        connectionInfo.addNetworkHandler(sshHandler);
+    }
+
+    private Map<String, Map<String, String>> mergeSshConfigToIdeaConfigMap(
+        Map<String, Map<String, String>> uuidToDataSourceProps,
+        Map<String, Map<String, String>> sshIdToSshConfigMap
+    ) {
+        for (Map.Entry<String, Map<String, String>> configEntry : uuidToDataSourceProps.entrySet()) {
+
+            Map<String, String> config = configEntry.getValue();
+            String sshUuid = config.get(SSH_PROPERTIES_UUID_PATH.getValue());
+            Map<String, String> sshConfig = sshIdToSshConfigMap.get(sshUuid);
+            if (sshConfig == null) continue;
+            config.putAll(sshConfig);
+        }
+        return uuidToDataSourceProps;
+    }
+
+
+    private Map<String, Map<String, String>> tryReadIdeaSshConfig(String pathToJetBrainsHomeDirectory) {
         try {
             return readIdeaSshConfig(pathToJetBrainsHomeDirectory);
         } catch (Exception e) {
@@ -88,62 +152,43 @@ public class IdeaDataSourceConfigService {
         return null;
     }
 
-    private Map<String, Map<String, String>> mergeTwoMapProps(Map<String, Map<String, String>> uuidToDataSourceProps, Map<String, Map<String, String>> uuidToDataSourceFromDifferentXml) {
+    private Map<String, Map<String, String>> mergeTwoMapProps(
+        Map<String, Map<String, String>> uuidToDataSourceProps, Map<String,
+        Map<String, String>> uuidToDataSourceFromDifferentXml
+    ) {
         for (Map.Entry<String, Map<String, String>> uuidToDataSourceEntry : uuidToDataSourceProps.entrySet()) {
             Map<String, String> dataSourceProps = uuidToDataSourceProps.get(uuidToDataSourceEntry.getKey());
             if (dataSourceProps == null) {
                 log.warn("Unexpectedly found data source properties for " + uuidToDataSourceEntry.getKey());
                 dataSourceProps = new HashMap<>();
             }
-            dataSourceProps.putAll(uuidToDataSourceFromDifferentXml.get(uuidToDataSourceEntry.getKey()));
+            Map<String, String> mergeValue = uuidToDataSourceFromDifferentXml.get(uuidToDataSourceEntry.getKey());
+            if (mergeValue != null) {
+                dataSourceProps.putAll(mergeValue);
+            }
         }
         return uuidToDataSourceProps;
     }
 
-    private Map<String, String> readIdeaSshConfig(String pathToIdeaFolder) throws IOException {
+    private Map<String, Map<String, String>> readIdeaSshConfig(String pathToIdeaFolder) throws Exception {
 
         String pathToSshFile = "\\options\\sshConfigs.xml";
-        try (Stream<Path> paths = Files.walk(Paths.get(pathToIdeaFolder))) {
+        try (Stream<Path> paths = Files.list(Paths.get(pathToIdeaFolder))) {
             List<Path> ideaFolders = paths
-                    .filter(Files::isDirectory)
-                    .filter(file -> file.getFileName().toString().toLowerCase().contains("idea"))
-                    .peek(System.out::println)
-                    .toList();
+                .filter(Files::isDirectory)
+                .filter(file -> file.getFileName().toString().toLowerCase().contains("idea"))
+                .peek(System.out::println)
+                .toList();
 
+            Map<String, Map<String, String>> sshConfig = new HashMap<>();
             for (Path ideaFolder : ideaFolders) {
                 File sshFile = new File(ideaFolder.toFile().getAbsolutePath() + pathToSshFile);
-                if(sshFile.exists()) {
-
+                if (sshFile.exists()) {
+                    sshConfig.putAll(readIdeaConfig(sshFile.getAbsolutePath(), "UTF-8"));
                 }
             }
+            return sshConfig;
         }
-
-        return null;
-    }
-
-    public ImportConnectionInfo buildIdeaConnectionFromProps(Map<String, String> conProps) {
-
-        ImportDriverInfo driverInfo = buildDriverInfo(conProps);
-        String url = conProps.get(JDBC_URL.getTagName());
-        URI uri = parseURL(url);
-        ImportConnectionInfo connectionInfo = new ImportConnectionInfo(
-                driverInfo,
-                conProps.get("data-source.uuid"),
-                conProps.get("data-source.name"),
-                url,
-                uri.getHost(),
-                String.valueOf(uri.getPort()),
-                "",
-                conProps.get("user-name"),
-                ""
-        );
-
-        IdeaImportConfigPostProcessor postProcessor = postProcessors.get(driverInfo.getId());
-        if (postProcessor != null) {
-            postProcessor.postProcess(connectionInfo, conProps);
-        }
-        log.debug("load connection: " + connectionInfo);
-        return connectionInfo;
     }
 
     private Map<String, Map<String, String>> readIdeaConfig(String fileName, String encoding) throws Exception {
@@ -169,19 +214,33 @@ public class IdeaDataSourceConfigService {
         for (int i = 0; i < allElements.getLength(); i++) {
             Node element = allElements.item(i);
             NamedNodeMap attrs = element.getAttributes();
-            if (DATASOURCE_TAG.getTagName().equals(element.getNodeName())) {
+            if (DATASOURCE_TAG.getValue().equals(element.getNodeName())) {
                 if (uuid != null) {
                     uuidToDatasourceProps.put(uuid, conProps);
                 }
-                String uuidOfNewDataSource = attrs.getNamedItem(UUID_ATTRIBUTE.getTagName()).getNodeValue();
+                String uuidOfNewDataSource = attrs.getNamedItem(UUID_ATTRIBUTE.getValue()).getNodeValue();
                 conProps = uuidToDatasourceProps.getOrDefault(uuidOfNewDataSource, new HashMap<>());
                 uuid = uuidOfNewDataSource;
             }
-            if (PROPERTIES_TAG.getTagName().equals(element.getNodeName())) {
+            if (PROPERTIES_TAG.getValue().equals(element.getNodeName())) {
                 Node value = attrs.getNamedItem("value");
                 String name = attrs.getNamedItem("name").getNodeValue();
-                if (name.startsWith(INTELIJ_CUSTOM_VALUE.getTagName())) continue;
+                if (name.startsWith(INTELIJ_CUSTOM_VALUE.getValue())) continue;
                 conProps.put(name, value == null ? "" : value.getNodeValue());
+            }
+            //SSH_CONFIG_TAG - tag from sshConfig.xml
+            if (SSH_CONFIG_TAG.getValue().equals(element.getNodeName())) {
+                uuid = attrs.getNamedItem("id").getNodeValue();
+            }
+            //SSH_PROPERTIES_TAG - tag from dataSourceLocal.xml
+            if (SSH_PROPERTIES_TAG.getValue().equals(element.getNodeName())) {
+                Node sshEnabled = allElements.item(++i);
+                conProps.put(SSH_PROPERTIES_ENABLE_PATH.getValue(),
+                    sshEnabled.getChildNodes().item(0).getNodeValue());
+                Node sshUuid = allElements.item(++i);
+                conProps.put(SSH_PROPERTIES_UUID_PATH.getValue(),
+                    sshUuid.getChildNodes().item(0).getNodeValue());
+                continue;
             }
 
             for (int j = 0; j < attrs.getLength(); j++) {
@@ -205,20 +264,20 @@ public class IdeaDataSourceConfigService {
 
     private static boolean isNodeHasTextValue(Node element) {
         return element.hasChildNodes() && element.getChildNodes().getLength() > 0 &&
-                !element.getChildNodes().item(0).getNodeValue().isBlank();
+            !element.getChildNodes().item(0).getNodeValue().isBlank();
     }
 
     private ImportDriverInfo buildDriverInfo(Map<String, String> conProps) {
 
-        String name = conProps.get(DATABASE_NAME_PATH.getTagName());
-        String refDriverName = conProps.get(DRIVER_REF.getTagName());
+        String name = conProps.get(DATABASE_NAME_PATH.getValue());
+        String refDriverName = conProps.get(DRIVER_REF_TAG.getValue());
 
         //todo to think about predefine map from idea name to our driver for exceptional case
         DBPDriver driver = findDriver(name, refDriverName);
         if (driver == null) {
             driver = tryFindDriverByToken(name);
             if (driver == null) {
-                driver = tryExtractDriverByUrl(conProps.get(JDBC_URL.getTagName()));
+                driver = tryExtractDriverByUrl(conProps.get(JDBC_URL_TAG.getValue()));
             }
         }
         return new ImportDriverInfo(driver);
@@ -252,8 +311,8 @@ public class IdeaDataSourceConfigService {
             List<DriverDescriptor> drivers = dataSourceProvider.getDrivers();
             for (DriverDescriptor driver : drivers) {
                 if (driver.getName().equalsIgnoreCase(name) || driver.getId().equalsIgnoreCase(name)
-                        || driver.getName().equalsIgnoreCase(refDriverName)
-                        || driver.getId().equalsIgnoreCase(refDriverName)) {
+                    || driver.getName().equalsIgnoreCase(refDriverName)
+                    || driver.getId().equalsIgnoreCase(refDriverName)) {
                     while (driver.getReplacedBy() != null) {
                         driver = driver.getReplacedBy();
                     }
@@ -261,9 +320,9 @@ public class IdeaDataSourceConfigService {
                 }
             }
             if (dataSourceProvider.getId().equalsIgnoreCase(name)
-                    || dataSourceProvider.getName().equalsIgnoreCase(name)
-                    || dataSourceProvider.getId().equalsIgnoreCase(refDriverName)
-                    || dataSourceProvider.getName().equalsIgnoreCase(refDriverName)) {
+                || dataSourceProvider.getName().equalsIgnoreCase(name)
+                || dataSourceProvider.getId().equalsIgnoreCase(refDriverName)
+                || dataSourceProvider.getName().equalsIgnoreCase(refDriverName)) {
                 if (!drivers.isEmpty()) {
                     DriverDescriptor driverDescriptor = drivers.get(0);
                     while (driverDescriptor.getReplacedBy() != null) {
